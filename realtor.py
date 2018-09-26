@@ -16,7 +16,7 @@ import time
 from selenium.webdriver.common.keys import Keys
 import pickle
 import traceback
-from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchElementException
 import gc
 from selenium.webdriver.common.action_chains import ActionChains
 from fake_useragent import UserAgent
@@ -112,38 +112,35 @@ def input_check_search_result(keys):
         # click pop ups
     try:
         browser.find_element_by_css_selector('#acsMainInvite > div > a.acsInviteButton.acsDeclineButton').click()
-    except:
+    except NoSuchElementException:
         pass
     #wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#searchBox')))
-    time.sleep(1+random.random())
-    try:                                           
-        browser.find_element_by_css_selector('#searchBox').click()
-        browser.find_element_by_css_selector('#searchBox').click()
-        browser.find_element_by_css_selector('#searchBox').click()
-        browser.find_element_by_css_selector('#searchBox').click()
+    time.sleep(1+random.random())                                          
+    browser.find_element_by_css_selector('#searchBox').click()
+    browser.find_element_by_css_selector('#searchBox').click()
+    browser.find_element_by_css_selector('#searchBox').click()
+    browser.find_element_by_css_selector('#searchBox').click()
 
-    except:
-        try:
-            browser.refresh()
-            time.sleep(5)
-            browser.find_element_by_css_selector('#searchBox').click()
-            browser.find_element_by_css_selector('#searchBox').click()
-            browser.find_element_by_css_selector('#searchBox').click()
-            browser.find_element_by_css_selector('#searchBox').click()
-        except:
-            if browser.current_url == 'https://www.realtor.com/miscellaneous/userblocked':
-                print('IP blocked')
-            return None
                                        
     
     browser.find_element_by_css_selector('#searchBox').clear()
     browser.find_element_by_css_selector('#searchBox').send_keys(keys)
     browser.find_element_by_css_selector('#searchBox').send_keys(Keys.ENTER)
     
-    time.sleep(3+random.random())                                     
-    if 'property_details' in browser.find_element_by_css_selector('body').get_attribute('class'):
+    time.sleep(3+random.random())
+    try:
+        browser.find_element_by_css_selector('body').get_attribute('class')
+        if 'property_details' in browser.find_element_by_css_selector('body').get_attribute('class'):
         #page_result = get_result(keys)
-        return True
+            return True
+    except NoSuchElementException:
+        url = r'https://www.realtor.com' + browser.find_element_by_css_selector('#srp-list > ul > li').get_attribute('data-url')
+        browser.get(url)
+            
+            #page_result = get_result(keys)
+            return True
+        except
+
     
     else:
         try:
@@ -173,44 +170,40 @@ def input_check_search_result(keys):
         
 def get_result(keys):
     # check keys is right:
-    try:
-        time.sleep(2+random.random())
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,'#ldp-address')))
-        
-        # if the browser window is small, it will be squeezed to two lines and have \n
-        # if not, it is just one line!!!                                           
-        address =  browser.find_element_by_css_selector('#ldp-address').text.split(' ')
-        if address[0] in keys:
-            pass
-        else:
-            return None
+
+    time.sleep(2+random.random())
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,'#ldp-address')))
     
-        # some house don't have detail feature, only simple feature                                           
-        try:
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,'#ldp-detail-features')))                                           
-            browser.find_element_by_css_selector('#ldp-detail-features > div > a').click()
-            time.sleep(1)                                     
-            detail = browser.find_element_by_css_selector('#ldp-detail-features').text.split('\n')
-        except :            
-            detail = browser.find_element_by_css_selector('#ldp-detail-public-records').text.split('\n')
-        
-        # not sure whether features are the same, so use dict for dataframe                                                  
-        detail_dict = dict()
-        for i in detail:
-            if ':' in i:
-                i = i.split(': ')
-                detail_dict[i[0]] = i[1]
-           
-        # price and tax history, need further cleaning    
-        detail_dict['price history'] = browser.find_element_by_css_selector('#ldp-history-price').text    
-        detail_dict['tax history'] = browser.find_element_by_css_selector('#ldp-history-taxes').text
-        detail_dict['keys'] = keys           
-        return detail_dict
-    
-    except:
-        print(keys)
-        traceback.print_exc
+    # if the browser window is small, it will be squeezed to two lines and have \n
+    # if not, it is just one line!!!                                           
+    address =  browser.find_element_by_css_selector('#ldp-address').text.split(' ')
+    if address[0] in keys:
+        pass
+    else:
         return None
+
+    # some house don't have detail feature, only simple feature                                           
+    try:
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,'#ldp-detail-features')))                                           
+        browser.find_element_by_css_selector('#ldp-detail-features > div > a').click()
+        time.sleep(1)                                     
+        detail = browser.find_element_by_css_selector('#ldp-detail-features').text.split('\n')
+    except NoSuchElementException:            
+        detail = browser.find_element_by_css_selector('#ldp-detail-public-records').text.split('\n')
+    
+    # not sure whether features are the same, so use dict for dataframe                                                  
+    detail_dict = dict()
+    for i in detail:
+        if ':' in i:
+            i = i.split(': ')
+            detail_dict[i[0]] = i[1]
+       
+    # price and tax history, need further cleaning    
+    detail_dict['price history'] = browser.find_element_by_css_selector('#ldp-history-price').text    
+    detail_dict['tax history'] = browser.find_element_by_css_selector('#ldp-history-taxes').text
+    detail_dict['keys'] = keys           
+    return detail_dict
+
     
 
 
@@ -248,7 +241,7 @@ def worker(
                 lock.acquire()
                 shared_key_index.append(key_index)
                 lock.release()
-                raise TimeoutException
+                raise KeyboardInterrupt
             elif check_result == True:
                 page_result = get_result(key_index[0])
             elif check_result == False: # key not found, next key
@@ -268,7 +261,7 @@ def worker(
     except Exception as e:
         print(e)
         #print(traceback.print_exc)
-        return # return is required to forcely enter finally??
+        # return is required to forcely enter finally??
                 
     finally:
         if n >0:
@@ -349,19 +342,22 @@ if __name__ == '__main__':
         
         while True:
             # 参数一定要写对？？
-            pool.apply_async(func = worker,args = (shared_key_index,shared_fail,lock,True))
-            time.sleep(1) # must sleep, otherwise the loop is really fast and consume computer sources 
+                pool.apply_async(func = worker,args = (shared_key_index,shared_fail,lock,True))
+                time.sleep(1) # must sleep, otherwise the loop is really fast and consume computer sources 
 			              # what is the mechanism of apply_async when the pool is full?
+
 
     except Exception as e:
         print(e)
     finally:
         print('exiting')
-        key_index = []
-        key_index = key_index.extend(shared_key_index)
-        fail = []
-        fail = fail.extend(shared_fail)
-        exit_handler(key_index,fail)
+        #key_index = []
+        #key_index = key_index.extend(shared_key_index)
+        #fail = []
+        #fail = fail.extend(shared_fail)
+        #print('sleep')
+        #time.sleep(4)
+        #exit_handler(key_index,fail)
         print(len(fail))
         try:
             pool.terminate()
